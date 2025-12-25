@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signup } from "@/lib/auth-actions";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,90 +12,40 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { signIn } from "next-auth/react";
 
-export default function SignupPage() {
+export default function LoginPage() {
   const router = useRouter();
-  const [fullName, setFullName] = React.useState("");
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
-  const [acceptTerms, setAcceptTerms] = React.useState(false);
+  const [rememberMe, setRememberMe] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [passwordStrength, setPasswordStrength] = React.useState(0);
-  const [errors, setErrors] = React.useState<Record<string, string>>({});
-
-  // Calculate password strength
-  React.useEffect(() => {
-    if (!password) {
-      setPasswordStrength(0);
-      return;
-    }
-    let strength = 0;
-    if (password.length >= 8) strength++;
-    if (password.length >= 12) strength++;
-    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^a-zA-Z0-9]/.test(password)) strength++;
-    setPasswordStrength(Math.min(strength, 4));
-  }, [password]);
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!fullName.trim()) {
-      newErrors.fullName = "Full name is required";
-    }
-    
-    if (!email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Invalid email format";
-    }
-    
-    if (!password) {
-      newErrors.password = "Password is required";
-    } else if (password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
-    }
-    
-    if (password !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-    
-    if (!acceptTerms) {
-      newErrors.terms = "You must accept the terms and conditions";
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  const [error, setError] = React.useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-    
     setIsLoading(true);
+    setError("");
     
     try {
-      const result = await signup({
-        name: fullName,
+      const result = await signIn("credentials", {
         email,
         password,
+        redirect: false,
       });
 
-      if (result.error) {
+      if (result?.error) {
+        setError(result.error);
         toast.error(result.error);
-        setErrors({ email: result.error });
-      } else if (result.success) {
-        toast.success(result.message);
-        // Redirect to OTP verification
-        router.push(`/verify-otp?email=${encodeURIComponent(email)}&purpose=verification`);
+      } else if (result?.ok) {
+        toast.success("Welcome back!");
+        router.push(callbackUrl);
+        router.refresh();
       }
     } catch (error) {
+      setError("An unexpected error occurred");
       toast.error("An unexpected error occurred");
     } finally {
       setIsLoading(false);
@@ -105,15 +55,15 @@ export default function SignupPage() {
   const handleSocialLogin = async (provider: string) => {
     try {
       await signIn(provider.toLowerCase(), {
-        callbackUrl: "/dashboard",
+        callbackUrl,
       });
     } catch (error) {
-      toast.error(`Failed to sign up with ${provider}`);
+      toast.error(`Failed to sign in with ${provider}`);
     }
   };
 
   return (
-   <div className="min-h-screen w-full flex items-center justify-center min-h-screen  font-sans bg-[#f5f5dc] bg-[radial-gradient(#707070_1px,transparent_1px)] bg-[length:20px_20px] dark:bg-[#2d2d2d] dark:bg-[radial-gradient(#a0a0a0_1px,transparent_1px)] p-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
@@ -142,35 +92,15 @@ export default function SignupPage() {
             </div>
           </div>
           <CardTitle className="text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Create Account
+            Welcome Back
           </CardTitle>
           <CardDescription className="text-base">
-            Sign up to get started with Code Speeder
+            Sign in to your account to continue
           </CardDescription>
         </CardHeader>
 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Full Name Field */}
-            <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-sm font-medium">
-                Full Name
-              </Label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="John Doe"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                className={cn("h-11", errors.fullName && "border-destructive")}
-                autoComplete="name"
-              />
-              {errors.fullName && (
-                <p className="text-xs text-destructive">{errors.fullName}</p>
-              )}
-            </div>
-
             {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">
@@ -183,19 +113,24 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className={cn("h-11", errors.email && "border-destructive")}
+                className={cn("h-11", error && "border-destructive")}
                 autoComplete="email"
               />
-              {errors.email && (
-                <p className="text-xs text-destructive">{errors.email}</p>
-              )}
             </div>
 
             {/* Password Field */}
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium">
-                Password
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-primary hover:underline transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -203,92 +138,31 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className={cn("h-11", errors.password && "border-destructive")}
-                autoComplete="new-password"
+                className={cn("h-11", error && "border-destructive")}
+                autoComplete="current-password"
               />
-              {errors.password && (
-                <p className="text-xs text-destructive">{errors.password}</p>
-              )}
-              
-              {/* Password Strength Indicator */}
-              {password && (
-                <div className="space-y-2">
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4].map((level) => (
-                      <div
-                        key={level}
-                        className={cn(
-                          "h-1 flex-1 rounded-full transition-colors",
-                          passwordStrength >= level
-                            ? passwordStrength === 1
-                              ? "bg-red-500"
-                              : passwordStrength === 2
-                              ? "bg-orange-500"
-                              : passwordStrength === 3
-                              ? "bg-yellow-500"
-                              : "bg-green-500"
-                            : "bg-muted"
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {passwordStrength === 0 && "Enter a password"}
-                    {passwordStrength === 1 && "Weak password"}
-                    {passwordStrength === 2 && "Fair password"}
-                    {passwordStrength === 3 && "Good password"}
-                    {passwordStrength === 4 && "Strong password"}
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Confirm Password Field */}
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
-              </Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className={cn("h-11", errors.confirmPassword && "border-destructive")}
-                autoComplete="new-password"
-              />
-              {errors.confirmPassword && (
-                <p className="text-xs text-destructive">{errors.confirmPassword}</p>
-              )}
-            </div>
-
-            {/* Terms and Conditions */}
-            <div className="space-y-2">
-              <div className="flex items-start space-x-2">
-                <Checkbox
-                  id="terms"
-                  checked={acceptTerms}
-                  onCheckedChange={(checked) => setAcceptTerms(checked as boolean)}
-                  className={cn("mt-0.5", errors.terms && "border-destructive")}
-                />
-                <Label
-                  htmlFor="terms"
-                  className="text-sm font-normal cursor-pointer select-none leading-tight"
-                >
-                  I agree to the{" "}
-                  <Link href="/terms" className="text-primary hover:underline">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/privacy" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                </Label>
+            {/* Error Message */}
+            {error && (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+                {error}
               </div>
-              {errors.terms && (
-                <p className="text-xs text-destructive ml-6">{errors.terms}</p>
-              )}
+            )}
+
+            {/* Remember Me */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remember"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+              />
+              <Label
+                htmlFor="remember"
+                className="text-sm font-normal cursor-pointer select-none"
+              >
+                Remember me for 30 days
+              </Label>
             </div>
 
             {/* Submit Button */}
@@ -319,10 +193,10 @@ export default function SignupPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Creating account...
+                  Signing in...
                 </>
               ) : (
-                "Create Account"
+                "Sign In"
               )}
             </Button>
           </form>
@@ -396,12 +270,12 @@ export default function SignupPage() {
         <CardFooter className="flex flex-col space-y-4">
           <Separator />
           <div className="text-sm text-center text-muted-foreground">
-            Already have an account?{" "}
+            Don't have an account?{" "}
             <Link
-              href="/login"
+              href="/signup"
               className="text-primary font-semibold hover:underline transition-colors"
             >
-              Sign in
+              Sign up for free
             </Link>
           </div>
         </CardFooter>
