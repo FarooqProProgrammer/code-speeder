@@ -13,11 +13,18 @@ datasource db {
   provider = "postgresql"
 }
 
+generator prismaTypesGenerator {
+  provider = "npx prisma-types-generator"
+  output   = "../src/generated/types"
+}
+
 // ======================================
 // ============ MODELS ==================
 // ======================================
 // 1. USERS MODEL
 // 2. OTP MODEL
+// 3. IMAGES MODEL
+// 4. ADDRESS MODEL
 
 // ======================================
 // ============ USERS MODEL =============
@@ -27,6 +34,8 @@ model User {
   email     String    @unique
   name      String?
   password  String
+  role      Role      @default(USER)
+  is_delete Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   otps      Otp[]
@@ -80,4 +89,42 @@ model Address {
   user      User?    @relation(fields: [userId], references: [id])
 
   @@map("address")
+}
+
+// ======================================
+// ============ BLOG ===================
+// ======================================
+model Blog {
+  id        String     @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  blogMetas BlogMeta[]
+
+  @@map("blog")
+}
+
+// ======================================
+// ============ BLOG META ===================
+// ======================================
+model BlogMeta {
+  id               String   @id @default(cuid())
+  MetaTitle        String?
+  MetaDescription  String?
+  CanonicalSection String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  blogId           String
+  blog             Blog     @relation(fields: [blogId], references: [id])
+
+  @@map("blog_meta")
+}
+
+// ======================================
+// ============ ENUMS ===================
+// ======================================
+enum Role {
+  USER
+  ADMIN
 }
