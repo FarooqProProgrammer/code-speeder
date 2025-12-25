@@ -2,9 +2,19 @@ import { BlogModel, BlogCreateInput } from "./blog";
 
 export interface BlogMetaModel {
   id: string;
-  MetaTitle: string | null;
-  MetaDescription: string | null;
-  CanonicalSection: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  metaKeywords: string | null;
+  canonicalUrl: string | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+  ogImageUrl: string | null;
+  twitterCard: string;
+  twitterTitle: string | null;
+  twitterDescription: string | null;
+  twitterImageUrl: string | null;
+  focusKeyword: string | null;
+  schema: any | null;
   createdAt: string;
   updatedAt: string;
   blogId: string;
@@ -13,9 +23,19 @@ export interface BlogMetaModel {
 
 export interface BlogMetaCreateInput {
   id?: string;
-  MetaTitle?: string | null;
-  MetaDescription?: string | null;
-  CanonicalSection?: string | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  metaKeywords?: string | null;
+  canonicalUrl?: string | null;
+  ogTitle?: string | null;
+  ogDescription?: string | null;
+  ogImageUrl?: string | null;
+  twitterCard?: string;
+  twitterTitle?: string | null;
+  twitterDescription?: string | null;
+  twitterImageUrl?: string | null;
+  focusKeyword?: string | null;
+  schema?: any | null;
   createdAt?: string;
   updatedAt?: string;
   blogId?: string;

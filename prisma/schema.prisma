@@ -25,22 +25,38 @@ generator prismaTypesGenerator {
 // 2. OTP MODEL
 // 3. IMAGES MODEL
 // 4. ADDRESS MODEL
+// 5. SUBSCRIPTION MODEL
+// 6. BLOG MODEL
+// 7. BLOG META MODEL
+// 8. BLOG CATEGORY MODEL
+// 9. BLOG TAG MODEL
+// 10. PROJECT MODEL
+// 11. PROJECT CONTENT MODEL
+// 12. PROJECT HTML MODEL
+// 13. PROJECT JAVASCRIPT MODEL
 
 // ======================================
 // ============ USERS MODEL =============
 // ======================================
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  name      String?
-  password  String
-  role      Role      @default(USER)
-  is_delete Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  otps      Otp[]
-  images    Image[]
-  addresses Address[]
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  password      String?
+  emailVerified DateTime?
+  image         String?
+  role          Role           @default(USER)
+  is_delete     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  otps          Otp[]
+  images        Image[]
+  addresses     Address[]
+  subscriptions Subscription[]
+  blogs         Blog[]         @relation("BlogAuthor")
+  projects      Project[]
+  accounts      Account[]
+  sessions      Session[]
 
   @@index([name])
   @@map("users")
@@ -52,11 +68,16 @@ model User {
 model Otp {
   id        String   @id @default(cuid())
   otpCode   String
+  email     String?
+  purpose   String? // "verification", "reset", "login"
+  expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
 
+  @@index([email])
+  @@index([otpCode])
   @@map("otp")
 }
 
@@ -92,33 +113,278 @@ model Address {
 }
 
 // ======================================
-// ============ BLOG ===================
+// ============ SUBSCRIPTION MODEL =============
 // ======================================
-model Blog {
-  id        String     @id @default(cuid())
-  title     String
-  content   String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  blogMetas BlogMeta[]
+model Subscription {
+  id                   String             @id @default(cuid())
+  stripeSubscriptionId String             @unique
+  stripeCustomerId     String
+  stripePriceId        String
+  stripeProductId      String?
+  status               SubscriptionStatus @default(INCOMPLETE)
+  planName             String?
+  planInterval         BillingInterval    @default(MONTH)
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  cancelAt             DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  quantity             Int                @default(1)
+  currency             String             @default("usd")
+  amount               Int
+  metadata             Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id])
 
-  @@map("blog")
+  @@index([stripeSubscriptionId])
+  @@index([stripeCustomerId])
+  @@index([userId])
+  @@index([status])
+  @@map("subscriptions")
 }
 
 // ======================================
-// ============ BLOG META ===================
+// ============ BLOG MODEL ===================
+// ======================================
+model Blog {
+  id               String         @id @default(cuid())
+  title            String
+  slug             String         @unique
+  excerpt          String?
+  content          String
+  featuredImageUrl String?
+  status           BlogStatus     @default(DRAFT)
+  visibility       BlogVisibility @default(PUBLIC)
+  publishedAt      DateTime?
+  scheduledAt      DateTime?
+  viewCount        Int            @default(0)
+  readingTime      Int? // in minutes
+  allowComments    Boolean        @default(true)
+  isFeatured       Boolean        @default(false)
+  isDeleted        Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  authorId         String
+  author           User           @relation("BlogAuthor", fields: [authorId], references: [id])
+  blogMeta         BlogMeta?
+  categories       BlogCategory[]
+  tags             BlogTag[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([authorId])
+  @@index([publishedAt])
+  @@index([isFeatured])
+  @@map("blogs")
+}
+
+// ======================================
+// ============ BLOG META MODEL ===================
 // ======================================
 model BlogMeta {
-  id               String   @id @default(cuid())
-  MetaTitle        String?
-  MetaDescription  String?
-  CanonicalSection String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  blogId           String
-  blog             Blog     @relation(fields: [blogId], references: [id])
+  id                 String   @id @default(cuid())
+  metaTitle          String?
+  metaDescription    String?
+  metaKeywords       String?
+  canonicalUrl       String?
+  ogTitle            String?
+  ogDescription      String?
+  ogImageUrl         String?
+  twitterCard        String?  @default("summary_large_image")
+  twitterTitle       String?
+  twitterDescription String?
+  twitterImageUrl    String?
+  focusKeyword       String?
+  schema             Json? // JSON-LD structured data
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  blogId             String   @unique
+  blog               Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
 
-  @@map("blog_meta")
+  @@index([focusKeyword])
+  @@map("blog_metas")
+}
+
+// ======================================
+// ============ BLOG CATEGORY MODEL =============
+// ======================================
+model BlogCategory {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  slug        String         @unique
+  description String?
+  imageUrl    String?
+  status      CategoryStatus @default(ACTIVE)
+  parentId    String?
+  parent      BlogCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    BlogCategory[] @relation("CategoryHierarchy")
+  postCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  blogs       Blog[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([parentId])
+  @@map("blog_categories")
+}
+
+// ======================================
+// ============ BLOG TAG MODEL =============
+// ======================================
+model BlogTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  postCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  blogs     Blog[]
+
+  @@index([slug])
+  @@map("blog_tags")
+}
+
+// ======================================
+// ============ PROJECT MODEL =============
+// ======================================
+model Project {
+  id                 String              @id @default(cuid())
+  name               String
+  description        String?
+  imageUrl           String?
+  status             ProjectStatus       @default(ACTIVE)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  userId             String
+  user               User                @relation(fields: [userId], references: [id])
+  projectContents    ProjectContent[]
+  projectHtmls       ProjectHtml[]
+  projectJavascripts ProjectJavascript[]
+
+  @@index([name])
+  @@index([status])
+  @@map("projects")
+}
+
+// ======================================
+// ============  PROJECT CONTENT MODEL =============
+// ======================================
+model ProjectContent {
+  id        String   @id @default(cuid())
+  content   String
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@map("project_contents")
+}
+
+// ======================================
+// ============  PROJECT HTML MODEL =============
+// ======================================
+model ProjectHtml {
+  id                 String              @id @default(cuid())
+  htmlContent        String              @db.Text
+  nodeName           String?
+  nodeType           String?
+  attributes         Json?
+  parentId           String?
+  parent             ProjectHtml?        @relation("HtmlNodeHierarchy", fields: [parentId], references: [id])
+  children           ProjectHtml[]       @relation("HtmlNodeHierarchy")
+  position           Int                 @default(0)
+  isVisible          Boolean             @default(true)
+  projectId          String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectJavascripts ProjectJavascript[]
+
+  @@index([projectId])
+  @@index([parentId])
+  @@index([nodeName])
+  @@map("project_htmls")
+}
+
+// ======================================
+// ============  PROJECT JAVASCRIPT MODEL =============
+// ======================================
+model ProjectJavascript {
+  id            String       @id @default(cuid())
+  jsContent     String       @db.Text
+  fileName      String?
+  functionName  String?
+  scriptType    ScriptType   @default(INLINE)
+  isModule      Boolean      @default(false)
+  isAsync       Boolean      @default(false)
+  dependencies  Json? // Array of dependency names
+  exports       Json? // Exported functions/variables
+  sourceMap     String?      @db.Text
+  minified      Boolean      @default(false)
+  position      Int          @default(0)
+  isEnabled     Boolean      @default(true)
+  htmlElementId String?
+  projectHtml   ProjectHtml? @relation(fields: [htmlElementId], references: [id])
+  projectId     String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([htmlElementId])
+  @@index([fileName])
+  @@index([functionName])
+  @@index([scriptType])
+  @@map("project_javascripts")
+}
+
+// ======================================
+// ============ NEXTAUTH MODELS =========
+// ======================================
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
 }
 
 // ======================================
@@ -127,4 +393,56 @@ model BlogMeta {
 enum Role {
   USER
   ADMIN
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  PAUSED
+}
+
+enum BillingInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+  ARCHIVED
+  REVIEW
+}
+
+enum BlogVisibility {
+  PUBLIC
+  PRIVATE
+  PASSWORD_PROTECTED
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ScriptType {
+  INLINE
+  EXTERNAL
+  MODULE
+  WORKER
+  SERVICE_WORKER
 }
