@@ -1,14 +1,23 @@
 services:
+
+  # ====================================
+  #  ============ CODE SPEEDER =========
+  # ====================================
   server:
     build:
       context: .
+    env_file:
+      - .env.local  # Load environment variables from .env.local file
     environment:
       NODE_ENV: production
     ports:
       - 3001:3001
 
+  # ====================================
+  #  ============ postgres  db =========
+  # ====================================
   db:
-    image: postgres
+    image: postgres:16-alpine  # Using specific version to avoid compatibility issues
     restart: always
     shm_size: 128mb
     environment:
@@ -18,7 +27,65 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql/data  # Volume for persistent data storage
+
+  # ====================================
+  #  ============ MinIO Object Storage =
+  # ====================================
+  minio:
+    image: minio/minio:latest
+    restart: always
+    volumes:
+      - minio-data:/data  # Persistent storage for uploaded files
+    ports:
+      - 9000:9000  # S3 API port
+      - 9001:9001  # MinIO Console port
+    environment:
+      MINIO_ROOT_USER: minioadmin    # Root username for MinIO
+      MINIO_ROOT_PASSWORD: minioadmin  # Root password for MinIO (should be changed in production)
+    command: server --console-address ":9001" /data  # Start MinIO server with console
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]  # Health check command
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ====================================
+  #  ============ MinIO Client Setup ===
+  # ====================================
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc admin user add myminio code-speeder-user somepassword123;
+      mc admin policy attach myminio readwrite --user=code-speeder-user;
+      mc mb myminio/codespeeder-bucket --ignore-existing;
+      mc anonymous set public myminio/codespeeder-bucket;
+      exit 0;
+      "
+
+  # ====================================
+  #  ============ Redis Cache =========
+  # ====================================
+  redis:
+    image: redis:7-alpine  # Lightweight Redis image with Alpine Linux
+    restart: always        # Always restart Redis if it crashes
+    ports:
+      - 6379:6379          # Default Redis port
+    volumes:
+      - redis-data:/data   # Persistent storage for Redis data (with persistence enabled)
+    command: redis-server --appendonly yes  # Enable AOF persistence for data durability
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]  # Health check command
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   db-data:
+  minio-data:  # Volume for MinIO data persistence
+  redis-data:  # Volume for Redis data persistence
